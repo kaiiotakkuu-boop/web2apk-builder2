@@ -1,0 +1,67 @@
+name: Web2APK Builder - Flutter Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_zip_url:
+        description: 'URL ZIP Project Flutter'
+        required: true
+        type: string
+      output_name:
+        description: 'Nama File APK Output'
+        required: false
+        default: 'app-release.apk'
+        type: string
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.16.0'
+          channel: 'stable'
+      
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+      
+      - name: Download project ZIP
+        run: |
+          curl -L "${{ github.event.inputs.project_zip_url }}" -o project.zip
+          unzip project.zip -d project/
+          ls -la project/
+      
+      - name: Find Flutter project root
+        id: find_root
+        run: |
+          ROOT_DIR=$(find project -name "pubspec.yaml" -type f | head -1 | xargs dirname)
+          echo "root_dir=$ROOT_DIR" >> $GITHUB_OUTPUT
+          echo "Found Flutter project at: $ROOT_DIR"
+      
+      - name: Flutter clean & get packages
+        run: |
+          cd ${{ steps.find_root.outputs.root_dir }}
+          flutter clean
+          flutter pub get
+      
+      - name: Build release APK
+        run: |
+          cd ${{ steps.find_root.outputs.root_dir }}
+          flutter build apk --release
+      
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ github.event.inputs.output_name }}
+          path: ${{ steps.find_root.outputs.root_dir }}/build/app/outputs/flutter-apk/app-release.apk
